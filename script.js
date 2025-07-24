@@ -6,6 +6,11 @@ class FlightTracker {
         this.trackingInterval = null;
         this.notificationsEnabled = false;
         this.lastKnownLocation = null;
+        this.flightMap = null;
+        this.departureMarker = null;
+        this.arrivalMarker = null;
+        this.currentPositionMarker = null;
+        this.flightPath = null;
         
         this.initializeEventListeners();
         this.checkNotificationPermission();
@@ -25,6 +30,15 @@ class FlightTracker {
 
         enableNotificationsBtn.addEventListener('click', () => {
             this.requestNotificationPermission();
+        });
+
+        // Handle window resize for map
+        window.addEventListener('resize', () => {
+            if (this.flightMap) {
+                setTimeout(() => {
+                    this.flightMap.invalidateSize();
+                }, 100);
+            }
         });
     }
 
@@ -146,6 +160,9 @@ class FlightTracker {
         // Update location info
         await this.updateLocationInfo(flight);
 
+        // Initialize or update map
+        this.initializeFlightMap(flight);
+
         // Update last updated time
         document.getElementById('lastUpdated').textContent = 
             `Last updated: ${new Date().toLocaleTimeString()}`;
@@ -196,6 +213,126 @@ class FlightTracker {
             currentLocationElement.textContent = 'Tracking...';
             altitudeElement.textContent = 'N/A';
         }
+    }
+
+    initializeFlightMap(flight) {
+        // Initialize map if not already done
+        if (!this.flightMap) {
+            this.flightMap = L.map('flightMap').setView([40.0, 0.0], 2);
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 18
+            }).addTo(this.flightMap);
+        }
+
+        // Clear existing markers and path
+        if (this.departureMarker) this.flightMap.removeLayer(this.departureMarker);
+        if (this.arrivalMarker) this.flightMap.removeLayer(this.arrivalMarker);
+        if (this.currentPositionMarker) this.flightMap.removeLayer(this.currentPositionMarker);
+        if (this.flightPath) this.flightMap.removeLayer(this.flightPath);
+
+        const bounds = [];
+
+        // Add departure marker
+        if (flight.departure?.airport?.lat && flight.departure?.airport?.lon) {
+            const depLat = flight.departure.airport.lat;
+            const depLon = flight.departure.airport.lon;
+            
+            this.departureMarker = L.marker([depLat, depLon], {
+                icon: this.createCustomIcon('🛫', '#28a745')
+            }).addTo(this.flightMap);
+            
+            this.departureMarker.bindPopup(`
+                <b>Departure</b><br>
+                ${flight.departure.airport.name || flight.departure.airport.iata}<br>
+                ${this.formatDateTime(flight.departure.scheduledTimeLocal)}
+            `);
+            
+            bounds.push([depLat, depLon]);
+        }
+
+        // Add arrival marker
+        if (flight.arrival?.airport?.lat && flight.arrival?.airport?.lon) {
+            const arrLat = flight.arrival.airport.lat;
+            const arrLon = flight.arrival.airport.lon;
+            
+            this.arrivalMarker = L.marker([arrLat, arrLon], {
+                icon: this.createCustomIcon('🛬', '#dc3545')
+            }).addTo(this.flightMap);
+            
+            this.arrivalMarker.bindPopup(`
+                <b>Destination</b><br>
+                ${flight.arrival.airport.name || flight.arrival.airport.iata}<br>
+                ${this.formatDateTime(flight.arrival.scheduledTimeLocal)}
+            `);
+            
+            bounds.push([arrLat, arrLon]);
+        }
+
+        // Add current position marker if available
+        if (flight.location?.lat && flight.location?.lon) {
+            const currentLat = flight.location.lat;
+            const currentLon = flight.location.lon;
+            const altitude = flight.location.altitude;
+            
+            this.currentPositionMarker = L.marker([currentLat, currentLon], {
+                icon: this.createCustomIcon('✈️', '#667eea')
+            }).addTo(this.flightMap);
+            
+            const altitudeText = altitude ? `<br>Altitude: ${Math.round(altitude)} ft` : '';
+            this.currentPositionMarker.bindPopup(`
+                <b>Current Position</b><br>
+                ${currentLat.toFixed(4)}°, ${currentLon.toFixed(4)}°${altitudeText}<br>
+                <small>Last updated: ${new Date().toLocaleTimeString()}</small>
+            `);
+            
+            bounds.push([currentLat, currentLon]);
+
+            // Draw flight path if we have departure and current position
+            if (flight.departure?.airport?.lat && flight.departure?.airport?.lon) {
+                const pathCoords = [
+                    [flight.departure.airport.lat, flight.departure.airport.lon],
+                    [currentLat, currentLon]
+                ];
+                
+                this.flightPath = L.polyline(pathCoords, {
+                    color: '#667eea',
+                    weight: 3,
+                    opacity: 0.7,
+                    dashArray: '5, 10'
+                }).addTo(this.flightMap);
+            }
+        }
+
+        // Fit map to show all markers
+        if (bounds.length > 0) {
+            this.flightMap.fitBounds(bounds, { 
+                padding: [20, 20],
+                maxZoom: 8
+            });
+        }
+    }
+
+    createCustomIcon(emoji, color) {
+        return L.divIcon({
+            html: `<div style="
+                background: ${color};
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 16px;
+                border: 2px solid white;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            ">${emoji}</div>`,
+            className: 'custom-marker',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
     }
 
     updateFlightProgress(flight) {
@@ -402,6 +539,16 @@ class FlightTracker {
 
     hideFlightInfo() {
         document.getElementById('flightInfo').classList.add('hidden');
+        
+        // Clean up map
+        if (this.flightMap) {
+            this.flightMap.remove();
+            this.flightMap = null;
+            this.departureMarker = null;
+            this.arrivalMarker = null;
+            this.currentPositionMarker = null;
+            this.flightPath = null;
+        }
     }
 }
 
