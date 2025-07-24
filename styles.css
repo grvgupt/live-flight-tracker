@@ -346,6 +346,46 @@ header p {
     display: flex;
     align-items: center;
     gap: 6px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.legend-item:hover {
+    background-color: rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
+}
+
+.legend-item:active {
+    transform: translateY(0);
+}
+
+.legend-item.location-legend {
+    position: relative;
+}
+
+.legend-item.location-legend::after {
+    content: "📍 Click to focus";
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+}
+
+.legend-item.location-legend:hover::after {
+    opacity: 1;
 }
 
 .legend-dot {
@@ -532,6 +572,10 @@ header p {
     
     .route-stat {
         font-size: 0.8rem;
+    }
+    
+    .legend-item.location-legend::after {
+        display: none;
     }
 }
 

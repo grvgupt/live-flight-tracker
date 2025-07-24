@@ -13,6 +13,7 @@ class FlightTracker {
         this.flightPath = null;
         this.plannedRoute = null;
         this.traveledPath = null;
+        this.currentFlightData = null;
         
         this.initializeEventListeners();
         this.checkNotificationPermission();
@@ -42,6 +43,22 @@ class FlightTracker {
                 setTimeout(() => {
                     this.flightMap.invalidateSize();
                 }, 100);
+            }
+        });
+
+        // Add legend click handlers
+        this.initializeLegendHandlers();
+    }
+
+    initializeLegendHandlers() {
+        // Add click handlers for legend items
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#legendDeparture')) {
+                this.focusOnDeparture();
+            } else if (e.target.closest('#legendDestination')) {
+                this.focusOnDestination();
+            } else if (e.target.closest('#legendCurrentPosition')) {
+                this.focusOnCurrentPosition();
             }
         });
     }
@@ -119,6 +136,9 @@ class FlightTracker {
     }
 
     async displayFlightInfo(flight) {
+        // Store current flight data for legend interactions
+        this.currentFlightData = flight;
+        
         const flightInfo = document.getElementById('flightInfo');
         
         // Update flight header
@@ -408,6 +428,63 @@ class FlightTracker {
         return degrees * (Math.PI / 180);
     }
 
+    focusOnDeparture() {
+        if (!this.flightMap || !this.currentFlightData?.departure?.airport?.lat || !this.currentFlightData?.departure?.airport?.lon) {
+            return;
+        }
+
+        const lat = this.currentFlightData.departure.airport.lat;
+        const lon = this.currentFlightData.departure.airport.lon;
+        
+        this.flightMap.setView([lat, lon], 10, {
+            animate: true,
+            duration: 1.0
+        });
+
+        // Show departure airport info popup
+        if (this.departureMarker) {
+            this.departureMarker.openPopup();
+        }
+    }
+
+    focusOnDestination() {
+        if (!this.flightMap || !this.currentFlightData?.arrival?.airport?.lat || !this.currentFlightData?.arrival?.airport?.lon) {
+            return;
+        }
+
+        const lat = this.currentFlightData.arrival.airport.lat;
+        const lon = this.currentFlightData.arrival.airport.lon;
+        
+        this.flightMap.setView([lat, lon], 10, {
+            animate: true,
+            duration: 1.0
+        });
+
+        // Show arrival airport info popup
+        if (this.arrivalMarker) {
+            this.arrivalMarker.openPopup();
+        }
+    }
+
+    focusOnCurrentPosition() {
+        if (!this.flightMap || !this.currentFlightData?.location?.lat || !this.currentFlightData?.location?.lon) {
+            return;
+        }
+
+        const lat = this.currentFlightData.location.lat;
+        const lon = this.currentFlightData.location.lon;
+        
+        this.flightMap.setView([lat, lon], 8, {
+            animate: true,
+            duration: 1.0
+        });
+
+        // Show current position info popup
+        if (this.currentPositionMarker) {
+            this.currentPositionMarker.openPopup();
+        }
+    }
+
     updateFlightProgress(flight) {
         const progressElement = document.getElementById('flightProgress');
         let progress = 0;
@@ -630,7 +707,7 @@ class FlightTracker {
     hideFlightInfo() {
         document.getElementById('flightInfo').classList.add('hidden');
         
-        // Clean up map
+        // Clean up map and flight data
         if (this.flightMap) {
             this.flightMap.remove();
             this.flightMap = null;
@@ -641,6 +718,8 @@ class FlightTracker {
             this.plannedRoute = null;
             this.traveledPath = null;
         }
+        
+        this.currentFlightData = null;
     }
 }
 
