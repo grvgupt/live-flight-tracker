@@ -18,13 +18,24 @@
         <div class="search-section">
             <form id="flightForm" class="flight-form">
                 <div class="input-group">
-                    <input 
-                        type="text" 
-                        id="flightNumber" 
-                        placeholder="Enter flight number (e.g., AA123, BA456)" 
-                        required
-                        autocomplete="off"
-                    >
+                    <div class="input-field">
+                        <label for="flightNumber"><i class="fas fa-plane"></i> Flight Number</label>
+                        <input 
+                            type="text" 
+                            id="flightNumber" 
+                            placeholder="e.g., AA123, BA456" 
+                            required
+                            autocomplete="off"
+                        >
+                    </div>
+                    <div class="input-field">
+                        <label for="flightDate"><i class="fas fa-calendar-alt"></i> Flight Date</label>
+                        <input 
+                            type="date" 
+                            id="flightDate" 
+                            required
+                        >
+                    </div>
                     <button type="submit" id="searchBtn">
                         <i class="fas fa-search"></i> Track Flight
                     </button>

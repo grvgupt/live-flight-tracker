@@ -14,6 +14,7 @@ class FlightTracker {
         
         this.initializeEventListeners();
         this.checkNotificationPermission();
+        this.setDefaultDate();
     }
 
     initializeEventListeners() {
@@ -23,8 +24,9 @@ class FlightTracker {
         flightForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const flightNumber = document.getElementById('flightNumber').value.trim().toUpperCase();
-            if (flightNumber) {
-                this.searchFlight(flightNumber);
+            const flightDate = document.getElementById('flightDate').value;
+            if (flightNumber && flightDate) {
+                this.searchFlight(flightNumber, flightDate);
             }
         });
 
@@ -42,23 +44,22 @@ class FlightTracker {
         });
     }
 
-    async searchFlight(flightNumber) {
+    async searchFlight(flightNumber, flightDate) {
         this.currentFlightNumber = flightNumber;
         this.showLoading();
         this.hideError();
         this.hideFlightInfo();
 
         try {
-            // First, get today's flight information
-            const today = new Date().toISOString().split('T')[0];
-            const flightData = await this.fetchFlightByNumber(flightNumber, today);
+            // Get flight information for the selected date
+            const flightData = await this.fetchFlightByNumber(flightNumber, flightDate);
             
             if (flightData && flightData.length > 0) {
                 const flight = flightData[0]; // Get the first flight of the day
                 await this.displayFlightInfo(flight);
                 this.startLiveTracking(flight);
             } else {
-                this.showError('Flight not found. Please check the flight number and try again.');
+                this.showError('Flight not found. Please check the flight number and date, then try again.');
             }
         } catch (error) {
             console.error('Error searching flight:', error);
@@ -438,6 +439,23 @@ class FlightTracker {
             clearInterval(this.trackingInterval);
             this.trackingInterval = null;
         }
+    }
+
+    setDefaultDate() {
+        // Set default date to today
+        const today = new Date();
+        const todayString = today.toISOString().split('T')[0];
+        document.getElementById('flightDate').value = todayString;
+        
+        // Set min date to 7 days ago and max date to 30 days from today
+        const minDate = new Date(today);
+        minDate.setDate(today.getDate() - 7);
+        const maxDate = new Date(today);
+        maxDate.setDate(today.getDate() + 30);
+        
+        const dateInput = document.getElementById('flightDate');
+        dateInput.min = minDate.toISOString().split('T')[0];
+        dateInput.max = maxDate.toISOString().split('T')[0];
     }
 
     // Notification functions

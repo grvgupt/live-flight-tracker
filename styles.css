@@ -50,23 +50,55 @@ header p {
 .input-group {
     display: flex;
     width: 100%;
-    max-width: 500px;
+    max-width: 700px;
     gap: 15px;
+    align-items: end;
 }
 
-#flightNumber {
+.input-field {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-field label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.input-field label i {
+    color: #667eea;
+    font-size: 0.8rem;
+}
+
+.input-field input {
     padding: 15px 20px;
     font-size: 1.1rem;
     border: 2px solid #e1e5e9;
     border-radius: 10px;
     outline: none;
     transition: all 0.3s ease;
+    background: white;
 }
 
-#flightNumber:focus {
+.input-field input:focus {
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.input-field input[type="date"] {
+    color: #333;
+    cursor: pointer;
+}
+
+.input-field input[type="date"]::-webkit-calendar-picker-indicator {
+    color: #667eea;
+    cursor: pointer;
 }
 
 #searchBtn {
@@ -413,6 +445,11 @@ header p {
     
     .input-group {
         flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .input-field {
+        width: 100%;
     }
     
     .route-info {
