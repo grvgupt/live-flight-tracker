@@ -1,0 +1,27 @@
+GITHUB SETUP COMMANDS
+====================
+
+1. First, create your repository on GitHub.com:
+   - Repository name: live-flight-tracker
+   - Set to Public
+   - Don't add README, .gitignore, or license
+
+2. Replace YOUR_USERNAME with your GitHub username and run these commands:
+
+git remote add origin https://github.com/YOUR_USERNAME/live-flight-tracker.git
+git branch -M main
+git push -u origin main
+
+3. After pushing, enable GitHub Pages:
+   - Go to your repository on GitHub
+   - Click "Settings" tab
+   - Scroll to "Pages" in left sidebar
+   - Source: "Deploy from a branch"
+   - Branch: "main"
+   - Folder: "/ (root)"
+   - Click "Save"
+
+4. Your app will be live at:
+   https://YOUR_USERNAME.github.io/live-flight-tracker
+
+Note: It may take 5-10 minutes for the site to go live after enabling Pages. 
