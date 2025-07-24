@@ -1,0 +1,411 @@
+class FlightTracker {
+    constructor() {
+        this.apiKey = 'b49c21636amshda0b2161424ab58p158bb2jsnf71d2e2b9151';
+        this.apiHost = 'aerodatabox.p.rapidapi.com';
+        this.currentFlightNumber = null;
+        this.trackingInterval = null;
+        this.notificationsEnabled = false;
+        this.lastKnownLocation = null;
+        
+        this.initializeEventListeners();
+        this.checkNotificationPermission();
+    }
+
+    initializeEventListeners() {
+        const flightForm = document.getElementById('flightForm');
+        const enableNotificationsBtn = document.getElementById('enableNotifications');
+
+        flightForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const flightNumber = document.getElementById('flightNumber').value.trim().toUpperCase();
+            if (flightNumber) {
+                this.searchFlight(flightNumber);
+            }
+        });
+
+        enableNotificationsBtn.addEventListener('click', () => {
+            this.requestNotificationPermission();
+        });
+    }
+
+    async searchFlight(flightNumber) {
+        this.currentFlightNumber = flightNumber;
+        this.showLoading();
+        this.hideError();
+        this.hideFlightInfo();
+
+        try {
+            // First, get today's flight information
+            const today = new Date().toISOString().split('T')[0];
+            const flightData = await this.fetchFlightByNumber(flightNumber, today);
+            
+            if (flightData && flightData.length > 0) {
+                const flight = flightData[0]; // Get the first flight of the day
+                await this.displayFlightInfo(flight);
+                this.startLiveTracking(flight);
+            } else {
+                this.showError('Flight not found. Please check the flight number and try again.');
+            }
+        } catch (error) {
+            console.error('Error searching flight:', error);
+            this.showError('Unable to fetch flight information. Please try again later.');
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    async fetchFlightByNumber(flightNumber, date) {
+        const options = {
+            method: 'GET',
+            headers: {
+                'X-RapidAPI-Key': this.apiKey,
+                'X-RapidAPI-Host': this.apiHost
+            }
+        };
+
+        const response = await fetch(
+            `https://${this.apiHost}/flights/number/${flightNumber}/${date}?withAircraftImage=false&withLocation=true`,
+            options
+        );
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
+    }
+
+    async fetchFlightPosition(flightId) {
+        const options = {
+            method: 'GET',
+            headers: {
+                'X-RapidAPI-Key': this.apiKey,
+                'X-RapidAPI-Host': this.apiHost
+            }
+        };
+
+        try {
+            const response = await fetch(
+                `https://${this.apiHost}/flights/id/${flightId}?withAircraftImage=false&withLocation=true`,
+                options
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching flight position:', error);
+            return null;
+        }
+    }
+
+    async displayFlightInfo(flight) {
+        const flightInfo = document.getElementById('flightInfo');
+        
+        // Update flight header
+        document.getElementById('flightTitle').textContent = 
+            `${flight.airline?.name || 'Unknown Airline'} ${flight.number}`;
+        
+        const statusBadge = document.getElementById('flightStatus');
+        const status = this.getFlightStatus(flight);
+        statusBadge.textContent = status.text;
+        statusBadge.className = `status-badge ${status.class}`;
+
+        // Update departure info
+        document.getElementById('depAirport').textContent = flight.departure?.airport?.iata || 'N/A';
+        document.getElementById('depAirportName').textContent = 
+            flight.departure?.airport?.name || 'Unknown Airport';
+        document.getElementById('depScheduled').textContent = 
+            this.formatDateTime(flight.departure?.scheduledTimeLocal);
+        document.getElementById('depActual').textContent = 
+            flight.departure?.actualTimeLocal ? 
+            `Actual: ${this.formatDateTime(flight.departure.actualTimeLocal)}` : 'On time';
+
+        // Update arrival info
+        document.getElementById('arrAirport').textContent = flight.arrival?.airport?.iata || 'N/A';
+        document.getElementById('arrAirportName').textContent = 
+            flight.arrival?.airport?.name || 'Unknown Airport';
+        document.getElementById('arrScheduled').textContent = 
+            this.formatDateTime(flight.arrival?.scheduledTimeLocal);
+        document.getElementById('arrActual').textContent = 
+            flight.arrival?.actualTimeLocal ? 
+            `Actual: ${this.formatDateTime(flight.arrival.actualTimeLocal)}` : 
+            (flight.arrival?.estimatedTimeLocal ? 
+            `Estimated: ${this.formatDateTime(flight.arrival.estimatedTimeLocal)}` : 'On time');
+
+        // Update additional info
+        document.getElementById('airline').textContent = flight.airline?.name || 'Unknown';
+        document.getElementById('aircraft').textContent = 
+            flight.aircraft?.model || flight.aircraft?.registration || 'Unknown';
+
+        // Update progress
+        this.updateFlightProgress(flight);
+
+        // Update location info
+        await this.updateLocationInfo(flight);
+
+        // Update last updated time
+        document.getElementById('lastUpdated').textContent = 
+            `Last updated: ${new Date().toLocaleTimeString()}`;
+
+        this.showFlightInfo();
+    }
+
+    async updateLocationInfo(flight) {
+        const currentLocationElement = document.getElementById('currentLocation');
+        const altitudeElement = document.getElementById('altitude');
+
+        if (flight.location) {
+            const lat = flight.location.lat;
+            const lon = flight.location.lon;
+            const altitude = flight.location.altitude;
+
+            if (lat && lon) {
+                try {
+                    // Try to get location name from reverse geocoding (simplified)
+                    currentLocationElement.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+                    
+                    // Store current location for notifications
+                    this.lastKnownLocation = {
+                        lat: lat,
+                        lon: lon,
+                        altitude: altitude,
+                        timestamp: new Date()
+                    };
+
+                    // Send notification if enabled
+                    if (this.notificationsEnabled) {
+                        this.sendLocationNotification(flight, lat, lon, altitude);
+                    }
+                } catch (error) {
+                    currentLocationElement.textContent = `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+                }
+
+                if (altitude) {
+                    altitudeElement.textContent = `${Math.round(altitude)} ft`;
+                } else {
+                    altitudeElement.textContent = 'N/A';
+                }
+            } else {
+                currentLocationElement.textContent = 'Location unavailable';
+                altitudeElement.textContent = 'N/A';
+            }
+        } else {
+            currentLocationElement.textContent = 'Tracking...';
+            altitudeElement.textContent = 'N/A';
+        }
+    }
+
+    updateFlightProgress(flight) {
+        const progressElement = document.getElementById('flightProgress');
+        let progress = 0;
+
+        if (flight.status === 'landed' || flight.arrival?.actualTimeLocal) {
+            progress = 100;
+        } else if (flight.status === 'departed' || flight.departure?.actualTimeLocal) {
+            // Calculate progress based on time if possible
+            const depTime = new Date(flight.departure?.scheduledTimeLocal || flight.departure?.actualTimeLocal);
+            const arrTime = new Date(flight.arrival?.scheduledTimeLocal || flight.arrival?.estimatedTimeLocal);
+            const now = new Date();
+
+            if (depTime && arrTime && now > depTime) {
+                const totalTime = arrTime - depTime;
+                const elapsedTime = now - depTime;
+                progress = Math.min(100, Math.max(0, (elapsedTime / totalTime) * 100));
+            } else {
+                progress = 25;
+            }
+        } else if (flight.status === 'boarding') {
+            progress = 10;
+        }
+
+        progressElement.style.width = `${progress}%`;
+    }
+
+    getFlightStatus(flight) {
+        const status = flight.status;
+        const departure = flight.departure;
+        const arrival = flight.arrival;
+
+        if (arrival?.actualTimeLocal) {
+            return { text: 'Landed', class: 'status-landed' };
+        } else if (departure?.actualTimeLocal) {
+            return { text: 'In Flight', class: 'status-departed' };
+        } else if (status === 'boarding') {
+            return { text: 'Boarding', class: 'status-boarding' };
+        } else if (status === 'delayed') {
+            return { text: 'Delayed', class: 'status-delayed' };
+        } else if (status === 'cancelled') {
+            return { text: 'Cancelled', class: 'status-cancelled' };
+        } else {
+            return { text: 'Scheduled', class: 'status-scheduled' };
+        }
+    }
+
+    formatDateTime(dateTimeString) {
+        if (!dateTimeString) return 'N/A';
+        
+        try {
+            const date = new Date(dateTimeString);
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        } catch (error) {
+            return dateTimeString;
+        }
+    }
+
+    startLiveTracking(flight) {
+        // Clear any existing interval
+        if (this.trackingInterval) {
+            clearInterval(this.trackingInterval);
+        }
+
+        // Only start tracking if flight is not landed
+        const status = this.getFlightStatus(flight);
+        if (status.text === 'Landed') {
+            return;
+        }
+
+        // Update flight info every minute
+        this.trackingInterval = setInterval(async () => {
+            try {
+                if (flight.id) {
+                    const updatedFlight = await this.fetchFlightPosition(flight.id);
+                    if (updatedFlight) {
+                        await this.displayFlightInfo(updatedFlight);
+                        
+                        // Stop tracking if flight has landed
+                        const currentStatus = this.getFlightStatus(updatedFlight);
+                        if (currentStatus.text === 'Landed') {
+                            this.stopLiveTracking();
+                            if (this.notificationsEnabled) {
+                                this.sendLandingNotification(updatedFlight);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating flight info:', error);
+            }
+        }, 60000); // Update every minute
+    }
+
+    stopLiveTracking() {
+        if (this.trackingInterval) {
+            clearInterval(this.trackingInterval);
+            this.trackingInterval = null;
+        }
+    }
+
+    // Notification functions
+    checkNotificationPermission() {
+        if ('Notification' in window) {
+            const permission = Notification.permission;
+            this.updateNotificationUI(permission);
+        } else {
+            document.getElementById('enableNotifications').style.display = 'none';
+            document.getElementById('notificationStatus').textContent = 
+                'Browser notifications not supported';
+        }
+    }
+
+    async requestNotificationPermission() {
+        if ('Notification' in window) {
+            const permission = await Notification.requestPermission();
+            this.updateNotificationUI(permission);
+        }
+    }
+
+    updateNotificationUI(permission) {
+        const btn = document.getElementById('enableNotifications');
+        const status = document.getElementById('notificationStatus');
+
+        switch (permission) {
+            case 'granted':
+                this.notificationsEnabled = true;
+                btn.textContent = '🔔 Notifications Enabled';
+                btn.disabled = true;
+                status.textContent = 'You will receive live flight updates every minute';
+                break;
+            case 'denied':
+                this.notificationsEnabled = false;
+                btn.textContent = '🔕 Notifications Blocked';
+                btn.disabled = true;
+                status.textContent = 'Notifications have been blocked. Enable them in browser settings.';
+                break;
+            default:
+                this.notificationsEnabled = false;
+                btn.textContent = '🔔 Enable Live Notifications';
+                btn.disabled = false;
+                status.textContent = 'Click to enable live flight location updates';
+        }
+    }
+
+    sendLocationNotification(flight, lat, lon, altitude) {
+        if (!this.notificationsEnabled || Notification.permission !== 'granted') {
+            return;
+        }
+
+        const title = `${flight.airline?.name || 'Flight'} ${flight.number} - Live Update`;
+        const altText = altitude ? ` at ${Math.round(altitude)} ft` : '';
+        const body = `Current location: ${lat.toFixed(4)}°, ${lon.toFixed(4)}°${altText}`;
+
+        new Notification(title, {
+            body: body,
+            icon: '✈️',
+            tag: 'flight-location-update'
+        });
+    }
+
+    sendLandingNotification(flight) {
+        if (!this.notificationsEnabled || Notification.permission !== 'granted') {
+            return;
+        }
+
+        const title = `${flight.airline?.name || 'Flight'} ${flight.number} - Landed!`;
+        const body = `Flight has landed at ${flight.arrival?.airport?.name || 'destination airport'}`;
+
+        new Notification(title, {
+            body: body,
+            icon: '🛬',
+            tag: 'flight-landed'
+        });
+    }
+
+    // UI helper functions
+    showLoading() {
+        document.getElementById('loadingSection').classList.remove('hidden');
+    }
+
+    hideLoading() {
+        document.getElementById('loadingSection').classList.add('hidden');
+    }
+
+    showError(message) {
+        document.getElementById('errorMessage').textContent = message;
+        document.getElementById('errorSection').classList.remove('hidden');
+    }
+
+    hideError() {
+        document.getElementById('errorSection').classList.add('hidden');
+    }
+
+    showFlightInfo() {
+        document.getElementById('flightInfo').classList.remove('hidden');
+    }
+
+    hideFlightInfo() {
+        document.getElementById('flightInfo').classList.add('hidden');
+    }
+}
+
+// Initialize the flight tracker when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+    new FlightTracker();
+}); 

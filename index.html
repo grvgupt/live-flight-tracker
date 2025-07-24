@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Flight Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-plane"></i> Live Flight Tracker</h1>
+            <p>Track any flight in real-time with live notifications</p>
+        </header>
+
+        <div class="search-section">
+            <form id="flightForm" class="flight-form">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="flightNumber" 
+                        placeholder="Enter flight number (e.g., AA123, BA456)" 
+                        required
+                        autocomplete="off"
+                    >
+                    <button type="submit" id="searchBtn">
+                        <i class="fas fa-search"></i> Track Flight
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div id="loadingSection" class="loading-section hidden">
+            <div class="spinner"></div>
+            <p>Searching for flight information...</p>
+        </div>
+
+        <div id="errorSection" class="error-section hidden">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p id="errorMessage"></p>
+        </div>
+
+        <div id="flightInfo" class="flight-info hidden">
+            <div class="flight-header">
+                <h2 id="flightTitle"></h2>
+                <span id="flightStatus" class="status-badge"></span>
+            </div>
+
+            <div class="flight-details">
+                <div class="route-info">
+                    <div class="airport departure">
+                        <div class="airport-code" id="depAirport"></div>
+                        <div class="airport-name" id="depAirportName"></div>
+                        <div class="time-info">
+                            <div class="scheduled-time" id="depScheduled"></div>
+                            <div class="actual-time" id="depActual"></div>
+                        </div>
+                    </div>
+
+                    <div class="flight-path">
+                        <i class="fas fa-plane"></i>
+                        <div class="progress-bar">
+                            <div class="progress" id="flightProgress"></div>
+                        </div>
+                    </div>
+
+                    <div class="airport arrival">
+                        <div class="airport-code" id="arrAirport"></div>
+                        <div class="airport-name" id="arrAirportName"></div>
+                        <div class="time-info">
+                            <div class="scheduled-time" id="arrScheduled"></div>
+                            <div class="actual-time" id="arrActual"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="additional-info">
+                    <div class="info-card">
+                        <i class="fas fa-building"></i>
+                        <div>
+                            <span class="label">Airline</span>
+                            <span class="value" id="airline"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <i class="fas fa-plane-departure"></i>
+                        <div>
+                            <span class="label">Aircraft</span>
+                            <span class="value" id="aircraft"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <div>
+                            <span class="label">Current Location</span>
+                            <span class="value" id="currentLocation">Tracking...</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <div>
+                            <span class="label">Altitude</span>
+                            <span class="value" id="altitude">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="notification-settings">
+                <button id="enableNotifications" class="notification-btn">
+                    <i class="fas fa-bell"></i> Enable Live Notifications
+                </button>
+                <div id="notificationStatus" class="notification-status"></div>
+            </div>
+        </div>
+
+        <div class="last-updated">
+            <span id="lastUpdated"></span>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
