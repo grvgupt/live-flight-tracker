@@ -183,10 +183,8 @@ class FlightTracker {
         // Update location info
         await this.updateLocationInfo(flight);
 
-        // Initialize or update map (with slight delay to ensure container is visible)
-        setTimeout(() => {
-            this.initializeFlightMap(flight);
-        }, 100);
+        // Initialize or update map
+        this.initializeFlightMap(flight);
 
         // Update last updated time
         document.getElementById('lastUpdated').textContent = 
@@ -241,8 +239,6 @@ class FlightTracker {
     }
 
     initializeFlightMap(flight) {
-        console.log('Initializing map with flight data:', flight);
-        
         // Initialize map if not already done
         if (!this.flightMap) {
             this.flightMap = L.map('flightMap').setView([40.0, 0.0], 2);
@@ -255,118 +251,94 @@ class FlightTracker {
         }
 
         // Clear existing markers and paths
+        this.clearMapLayers();
+
+        // Get departure and arrival airports
+        const depAirport = flight.departure?.airport;
+        const arrAirport = flight.arrival?.airport;
+
+        if (!depAirport?.iata || !arrAirport?.iata) {
+            console.warn('Missing airport information');
+            return;
+        }
+
+        // Get coordinates for both airports
+        const depCoords = this.getKnownAirportCoordinates(depAirport.iata);
+        const arrCoords = this.getKnownAirportCoordinates(arrAirport.iata);
+
+        if (!depCoords || !arrCoords) {
+            console.warn('Could not find coordinates for airports:', depAirport.iata, arrAirport.iata);
+            return;
+        }
+
+        // Add departure marker
+        this.departureMarker = L.marker([depCoords.lat, depCoords.lon], {
+            icon: this.createCustomIcon('🛫', '#28a745')
+        }).addTo(this.flightMap);
+        
+        this.departureMarker.bindPopup(`
+            <b>Departure</b><br>
+            ${depAirport.name || depAirport.iata}<br>
+            ${this.formatDateTime(flight.departure.scheduledTimeLocal)}
+        `);
+
+        // Add arrival marker
+        this.arrivalMarker = L.marker([arrCoords.lat, arrCoords.lon], {
+            icon: this.createCustomIcon('🛬', '#dc3545')
+        }).addTo(this.flightMap);
+        
+        this.arrivalMarker.bindPopup(`
+            <b>Destination</b><br>
+            ${arrAirport.name || arrAirport.iata}<br>
+            ${this.formatDateTime(flight.arrival.scheduledTimeLocal)}
+        `);
+
+        // Draw flight path between departure and destination
+        const flightPath = [
+            [depCoords.lat, depCoords.lon],
+            [arrCoords.lat, arrCoords.lon]
+        ];
+        
+        this.plannedRoute = L.polyline(flightPath, {
+            color: '#667eea',
+            weight: 3,
+            opacity: 0.7
+        }).addTo(this.flightMap);
+
+        // Add current position if available
+        if (flight.location?.lat && flight.location?.lon) {
+            this.currentPositionMarker = L.marker([flight.location.lat, flight.location.lon], {
+                icon: this.createCustomIcon('✈️', '#ffc107')
+            }).addTo(this.flightMap);
+            
+            const altitude = flight.location.altitude ? `<br>Altitude: ${Math.round(flight.location.altitude)} ft` : '';
+            this.currentPositionMarker.bindPopup(`
+                <b>Current Position</b><br>
+                ${flight.location.lat.toFixed(4)}°, ${flight.location.lon.toFixed(4)}°${altitude}
+            `);
+        }
+
+        // Set map bounds to show both airports
+        const bounds = L.latLngBounds([
+            [depCoords.lat, depCoords.lon],
+            [arrCoords.lat, arrCoords.lon]
+        ]);
+        
+        this.flightMap.fitBounds(bounds, { 
+            padding: [50, 50]
+        });
+
+        // Update route information
+        this.updateSimpleRouteInfo(flight, depCoords, arrCoords);
+    }
+
+    clearMapLayers() {
         if (this.departureMarker) this.flightMap.removeLayer(this.departureMarker);
         if (this.arrivalMarker) this.flightMap.removeLayer(this.arrivalMarker);
         if (this.currentPositionMarker) this.flightMap.removeLayer(this.currentPositionMarker);
-        if (this.flightPath) this.flightMap.removeLayer(this.flightPath);
         if (this.plannedRoute) this.flightMap.removeLayer(this.plannedRoute);
         if (this.traveledPath) this.flightMap.removeLayer(this.traveledPath);
-
-        const bounds = [];
-
-        // Get airport coordinates (fallback to known coordinates if API doesn't provide them)
-        const depCoords = this.getAirportCoordinates(flight.departure?.airport);
-        const arrCoords = this.getAirportCoordinates(flight.arrival?.airport);
-
-        console.log('Departure coordinates:', depCoords);
-        console.log('Arrival coordinates:', arrCoords);
-
-        // Add departure marker
-        if (depCoords) {
-            this.departureMarker = L.marker([depCoords.lat, depCoords.lon], {
-                icon: this.createCustomIcon('🛫', '#28a745')
-            }).addTo(this.flightMap);
-            
-            this.departureMarker.bindPopup(`
-                <b>Departure</b><br>
-                ${flight.departure.airport.name || flight.departure.airport.iata}<br>
-                ${this.formatDateTime(flight.departure.scheduledTimeLocal)}
-            `);
-            
-            bounds.push([depCoords.lat, depCoords.lon]);
-        }
-
-        // Add arrival marker
-        if (arrCoords) {
-            this.arrivalMarker = L.marker([arrCoords.lat, arrCoords.lon], {
-                icon: this.createCustomIcon('🛬', '#dc3545')
-            }).addTo(this.flightMap);
-            
-            this.arrivalMarker.bindPopup(`
-                <b>Destination</b><br>
-                ${flight.arrival.airport.name || flight.arrival.airport.iata}<br>
-                ${this.formatDateTime(flight.arrival.scheduledTimeLocal)}
-            `);
-            
-            bounds.push([arrCoords.lat, arrCoords.lon]);
-        }
-
-        // Add current position marker if available
-        if (flight.location?.lat && flight.location?.lon) {
-            const currentLat = flight.location.lat;
-            const currentLon = flight.location.lon;
-            const altitude = flight.location.altitude;
-            
-            this.currentPositionMarker = L.marker([currentLat, currentLon], {
-                icon: this.createCustomIcon('✈️', '#667eea')
-            }).addTo(this.flightMap);
-            
-            const altitudeText = altitude ? `<br>Altitude: ${Math.round(altitude)} ft` : '';
-            this.currentPositionMarker.bindPopup(`
-                <b>Current Position</b><br>
-                ${currentLat.toFixed(4)}°, ${currentLon.toFixed(4)}°${altitudeText}<br>
-                <small>Last updated: ${new Date().toLocaleTimeString()}</small>
-            `);
-            
-            bounds.push([currentLat, currentLon]);
-
-            // Draw traveled path if we have departure and current position
-            if (depCoords) {
-                const traveledCoords = [
-                    [depCoords.lat, depCoords.lon],
-                    [currentLat, currentLon]
-                ];
-                
-                this.traveledPath = L.polyline(traveledCoords, {
-                    color: '#667eea',
-                    weight: 4,
-                    opacity: 0.8
-                }).addTo(this.flightMap);
-            }
-        }
-
-        // Draw planned route if we have both departure and arrival airports
-        if (depCoords && arrCoords) {
-            const routeCoords = [
-                [depCoords.lat, depCoords.lon],
-                [arrCoords.lat, arrCoords.lon]
-            ];
-            
-            this.plannedRoute = L.polyline(routeCoords, {
-                color: '#6c757d',
-                weight: 2,
-                opacity: 0.6,
-                dashArray: '10, 10'
-            }).addTo(this.flightMap);
-
-            // Calculate and display route information
-            this.updateRouteInfo(flight, depCoords, arrCoords);
-        }
-
-        // Fit map to show all markers
-        if (bounds.length > 0) {
-            this.flightMap.fitBounds(bounds, { 
-                padding: [20, 20],
-                maxZoom: 8
-            });
-        } else if (flight.location?.lat && flight.location?.lon) {
-            // If no airport coordinates but we have current position, center on that
-            this.flightMap.setView([flight.location.lat, flight.location.lon], 6);
-        } else {
-            // Show world view if no coordinates available
-            this.flightMap.setView([40.0, 0.0], 2);
-            console.warn('No location data available for map display');
-        }
+        if (this.flightPath) this.flightMap.removeLayer(this.flightPath);
     }
 
     createCustomIcon(emoji, color) {
@@ -389,22 +361,31 @@ class FlightTracker {
         });
     }
 
-    getAirportCoordinates(airport) {
-        if (!airport) return null;
+    updateSimpleRouteInfo(flight, depCoords, arrCoords) {
+        // Calculate route distance
+        const distance = this.calculateDistance(
+            depCoords.lat, depCoords.lon,
+            arrCoords.lat, arrCoords.lon
+        );
+
+        document.getElementById('routeDistance').innerHTML = 
+            `<i class="fas fa-route"></i> <span>${Math.round(distance)} miles</span>`;
+
+        // Calculate estimated flight duration
+        const depTime = new Date(flight.departure?.scheduledTimeLocal);
+        const arrTime = new Date(flight.arrival?.scheduledTimeLocal);
         
-        // First check if API provided coordinates
-        if (airport.lat && airport.lon) {
-            return { lat: airport.lat, lon: airport.lon };
+        if (depTime && arrTime) {
+            const durationMs = arrTime - depTime;
+            const hours = Math.floor(durationMs / (1000 * 60 * 60));
+            const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+            
+            document.getElementById('flightDuration').innerHTML = 
+                `<i class="fas fa-clock"></i> <span>${hours}h ${minutes}m</span>`;
+        } else {
+            document.getElementById('flightDuration').innerHTML = 
+                `<i class="fas fa-clock"></i> <span>Duration unknown</span>`;
         }
-        
-        // Fallback to common airport coordinates database
-        const airportCoords = this.getKnownAirportCoordinates(airport.iata);
-        if (airportCoords) {
-            return airportCoords;
-        }
-        
-        console.warn(`No coordinates found for airport: ${airport.iata || airport.name}`);
-        return null;
     }
 
     getKnownAirportCoordinates(iataCode) {
@@ -469,34 +450,7 @@ class FlightTracker {
         return airports[iataCode.toUpperCase()] || null;
     }
 
-    updateRouteInfo(flight, depCoords, arrCoords) {
-        if (depCoords && arrCoords) {
-            // Calculate route distance
-            const distance = this.calculateDistance(
-                depCoords.lat, depCoords.lon,
-                arrCoords.lat, arrCoords.lon
-            );
 
-            document.getElementById('routeDistance').innerHTML = 
-                `<i class="fas fa-route"></i> <span>${Math.round(distance)} miles</span>`;
-
-            // Calculate estimated flight duration
-            const depTime = new Date(flight.departure?.scheduledTimeLocal || flight.departure?.actualTimeLocal);
-            const arrTime = new Date(flight.arrival?.scheduledTimeLocal || flight.arrival?.estimatedTimeLocal);
-            
-            if (depTime && arrTime) {
-                const durationMs = arrTime - depTime;
-                const hours = Math.floor(durationMs / (1000 * 60 * 60));
-                const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-                
-                document.getElementById('flightDuration').innerHTML = 
-                    `<i class="fas fa-clock"></i> <span>${hours}h ${minutes}m</span>`;
-            } else {
-                document.getElementById('flightDuration').innerHTML = 
-                    `<i class="fas fa-clock"></i> <span>Duration unknown</span>`;
-            }
-        }
-    }
 
     calculateDistance(lat1, lon1, lat2, lon2) {
         // Haversine formula to calculate great-circle distance
@@ -517,53 +471,39 @@ class FlightTracker {
     }
 
     focusOnDeparture() {
-        if (!this.flightMap || !this.currentFlightData) {
+        if (!this.flightMap || !this.currentFlightData || !this.departureMarker) {
             return;
         }
 
-        const depCoords = this.getAirportCoordinates(this.currentFlightData.departure?.airport);
+        const depCoords = this.getKnownAirportCoordinates(this.currentFlightData.departure?.airport?.iata);
         if (!depCoords) {
-            console.warn('No departure coordinates available');
             return;
         }
 
-        const lat = depCoords.lat;
-        const lon = depCoords.lon;
-        
-        this.flightMap.setView([lat, lon], 10, {
+        this.flightMap.setView([depCoords.lat, depCoords.lon], 8, {
             animate: true,
             duration: 1.0
         });
 
-        // Show departure airport info popup
-        if (this.departureMarker) {
-            this.departureMarker.openPopup();
-        }
+        this.departureMarker.openPopup();
     }
 
     focusOnDestination() {
-        if (!this.flightMap || !this.currentFlightData) {
+        if (!this.flightMap || !this.currentFlightData || !this.arrivalMarker) {
             return;
         }
 
-        const arrCoords = this.getAirportCoordinates(this.currentFlightData.arrival?.airport);
+        const arrCoords = this.getKnownAirportCoordinates(this.currentFlightData.arrival?.airport?.iata);
         if (!arrCoords) {
-            console.warn('No destination coordinates available');
             return;
         }
 
-        const lat = arrCoords.lat;
-        const lon = arrCoords.lon;
-        
-        this.flightMap.setView([lat, lon], 10, {
+        this.flightMap.setView([arrCoords.lat, arrCoords.lon], 8, {
             animate: true,
             duration: 1.0
         });
 
-        // Show arrival airport info popup
-        if (this.arrivalMarker) {
-            this.arrivalMarker.openPopup();
-        }
+        this.arrivalMarker.openPopup();
     }
 
     focusOnCurrentPosition() {
