@@ -327,6 +327,17 @@ header p {
     width: 100%;
     background: #e9ecef;
     position: relative;
+    z-index: 1;
+}
+
+/* Ensure Leaflet map has proper dimensions */
+.flight-map .leaflet-container {
+    height: 100%;
+    width: 100%;
+}
+
+.flight-map .leaflet-control-container {
+    position: relative;
 }
 
 .map-info {

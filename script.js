@@ -46,6 +46,15 @@ class FlightTracker {
             }
         });
 
+        // Handle visibility changes (tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && this.flightMap) {
+                setTimeout(() => {
+                    this.flightMap.invalidateSize();
+                }, 200);
+            }
+        });
+
         // Add legend click handlers
         this.initializeLegendHandlers();
     }
@@ -183,8 +192,10 @@ class FlightTracker {
         // Update location info
         await this.updateLocationInfo(flight);
 
-        // Initialize or update map
-        this.initializeFlightMap(flight);
+        // Initialize or update map (delay to ensure container is visible and sized)
+        setTimeout(() => {
+            this.initializeFlightMap(flight);
+        }, 200);
 
         // Update last updated time
         document.getElementById('lastUpdated').textContent = 
@@ -239,15 +250,61 @@ class FlightTracker {
     }
 
     initializeFlightMap(flight) {
+        // Check if map container is visible and has dimensions
+        const mapContainer = document.getElementById('flightMap');
+        if (!mapContainer || mapContainer.offsetHeight === 0) {
+            console.warn('Map container not ready, retrying...');
+            setTimeout(() => this.initializeFlightMap(flight), 300);
+            return;
+        }
+
         // Initialize map if not already done
         if (!this.flightMap) {
-            this.flightMap = L.map('flightMap').setView([40.0, 0.0], 2);
-            
-            // Add OpenStreetMap tiles
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 18
-            }).addTo(this.flightMap);
+            try {
+                this.flightMap = L.map('flightMap', {
+                    zoomControl: true,
+                    attributionControl: true,
+                    scrollWheelZoom: true,
+                    doubleClickZoom: true,
+                    touchZoom: true
+                }).setView([40.0, 0.0], 2);
+                
+                // Add OpenStreetMap tiles with error handling
+                const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 18,
+                    minZoom: 1,
+                    errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+                });
+
+                tileLayer.on('loading', () => {
+                    console.log('Map tiles loading...');
+                });
+
+                tileLayer.on('load', () => {
+                    console.log('Map tiles loaded successfully');
+                });
+
+                tileLayer.on('tileerror', (e) => {
+                    console.warn('Tile loading error:', e);
+                });
+
+                tileLayer.addTo(this.flightMap);
+
+                // Force map to invalidate size after a short delay
+                setTimeout(() => {
+                    if (this.flightMap) {
+                        this.flightMap.invalidateSize();
+                    }
+                }, 100);
+
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                return;
+            }
+        } else {
+            // If map exists, invalidate size to handle container changes
+            this.flightMap.invalidateSize();
         }
 
         // Clear existing markers and paths
@@ -319,14 +376,32 @@ class FlightTracker {
         }
 
         // Set map bounds to show both airports
-        const bounds = L.latLngBounds([
-            [depCoords.lat, depCoords.lon],
-            [arrCoords.lat, arrCoords.lon]
-        ]);
-        
-        this.flightMap.fitBounds(bounds, { 
-            padding: [50, 50]
-        });
+        try {
+            const bounds = L.latLngBounds([
+                [depCoords.lat, depCoords.lon],
+                [arrCoords.lat, arrCoords.lon]
+            ]);
+            
+            // Use setTimeout to ensure map is ready before fitting bounds
+            setTimeout(() => {
+                if (this.flightMap) {
+                    this.flightMap.fitBounds(bounds, { 
+                        padding: [50, 50],
+                        animate: false
+                    });
+                    
+                    // Force another invalidateSize after bounds are set
+                    setTimeout(() => {
+                        if (this.flightMap) {
+                            this.flightMap.invalidateSize();
+                        }
+                    }, 100);
+                }
+            }, 100);
+
+        } catch (error) {
+            console.error('Error setting map bounds:', error);
+        }
 
         // Update route information
         this.updateSimpleRouteInfo(flight, depCoords, arrCoords);
