@@ -368,6 +368,45 @@ header p {
     background: #dc3545;
 }
 
+.legend-line {
+    width: 20px;
+    height: 3px;
+    display: inline-block;
+    border-radius: 2px;
+}
+
+.legend-line.planned {
+    background: #6c757d;
+    border: 1px dashed #495057;
+}
+
+.legend-line.traveled {
+    background: #667eea;
+    box-shadow: 0 0 4px rgba(102, 126, 234, 0.4);
+}
+
+.route-info {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e1e5e9;
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.route-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.route-stat i {
+    color: #667eea;
+    width: 14px;
+}
+
 @keyframes pulse {
     0% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.7; transform: scale(1.1); }
@@ -483,6 +522,15 @@ header p {
     }
     
     .legend-item {
+        font-size: 0.8rem;
+    }
+    
+    .route-info {
+        gap: 15px;
+        justify-content: center;
+    }
+    
+    .route-stat {
         font-size: 0.8rem;
     }
 }

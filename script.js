@@ -11,6 +11,8 @@ class FlightTracker {
         this.arrivalMarker = null;
         this.currentPositionMarker = null;
         this.flightPath = null;
+        this.plannedRoute = null;
+        this.traveledPath = null;
         
         this.initializeEventListeners();
         this.checkNotificationPermission();
@@ -228,11 +230,13 @@ class FlightTracker {
             }).addTo(this.flightMap);
         }
 
-        // Clear existing markers and path
+        // Clear existing markers and paths
         if (this.departureMarker) this.flightMap.removeLayer(this.departureMarker);
         if (this.arrivalMarker) this.flightMap.removeLayer(this.arrivalMarker);
         if (this.currentPositionMarker) this.flightMap.removeLayer(this.currentPositionMarker);
         if (this.flightPath) this.flightMap.removeLayer(this.flightPath);
+        if (this.plannedRoute) this.flightMap.removeLayer(this.plannedRoute);
+        if (this.traveledPath) this.flightMap.removeLayer(this.traveledPath);
 
         const bounds = [];
 
@@ -291,20 +295,39 @@ class FlightTracker {
             
             bounds.push([currentLat, currentLon]);
 
-            // Draw flight path if we have departure and current position
+            // Draw traveled path if we have departure and current position
             if (flight.departure?.airport?.lat && flight.departure?.airport?.lon) {
-                const pathCoords = [
+                const traveledCoords = [
                     [flight.departure.airport.lat, flight.departure.airport.lon],
                     [currentLat, currentLon]
                 ];
                 
-                this.flightPath = L.polyline(pathCoords, {
+                this.traveledPath = L.polyline(traveledCoords, {
                     color: '#667eea',
-                    weight: 3,
-                    opacity: 0.7,
-                    dashArray: '5, 10'
+                    weight: 4,
+                    opacity: 0.8
                 }).addTo(this.flightMap);
             }
+        }
+
+        // Draw planned route if we have both departure and arrival airports
+        if (flight.departure?.airport?.lat && flight.departure?.airport?.lon &&
+            flight.arrival?.airport?.lat && flight.arrival?.airport?.lon) {
+            
+            const routeCoords = [
+                [flight.departure.airport.lat, flight.departure.airport.lon],
+                [flight.arrival.airport.lat, flight.arrival.airport.lon]
+            ];
+            
+            this.plannedRoute = L.polyline(routeCoords, {
+                color: '#6c757d',
+                weight: 2,
+                opacity: 0.6,
+                dashArray: '10, 10'
+            }).addTo(this.flightMap);
+
+            // Calculate and display route information
+            this.updateRouteInfo(flight);
         }
 
         // Fit map to show all markers
@@ -334,6 +357,55 @@ class FlightTracker {
             iconSize: [30, 30],
             iconAnchor: [15, 15]
         });
+    }
+
+    updateRouteInfo(flight) {
+        if (flight.departure?.airport?.lat && flight.departure?.airport?.lon &&
+            flight.arrival?.airport?.lat && flight.arrival?.airport?.lon) {
+            
+            // Calculate route distance
+            const distance = this.calculateDistance(
+                flight.departure.airport.lat, flight.departure.airport.lon,
+                flight.arrival.airport.lat, flight.arrival.airport.lon
+            );
+
+            document.getElementById('routeDistance').innerHTML = 
+                `<i class="fas fa-route"></i> <span>${Math.round(distance)} miles</span>`;
+
+            // Calculate estimated flight duration
+            const depTime = new Date(flight.departure?.scheduledTimeLocal || flight.departure?.actualTimeLocal);
+            const arrTime = new Date(flight.arrival?.scheduledTimeLocal || flight.arrival?.estimatedTimeLocal);
+            
+            if (depTime && arrTime) {
+                const durationMs = arrTime - depTime;
+                const hours = Math.floor(durationMs / (1000 * 60 * 60));
+                const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+                
+                document.getElementById('flightDuration').innerHTML = 
+                    `<i class="fas fa-clock"></i> <span>${hours}h ${minutes}m</span>`;
+            } else {
+                document.getElementById('flightDuration').innerHTML = 
+                    `<i class="fas fa-clock"></i> <span>Duration unknown</span>`;
+            }
+        }
+    }
+
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        // Haversine formula to calculate great-circle distance
+        const R = 3959; // Earth's radius in miles
+        const dLat = this.toRadians(lat2 - lat1);
+        const dLon = this.toRadians(lon2 - lon1);
+        
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+        
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c;
+    }
+
+    toRadians(degrees) {
+        return degrees * (Math.PI / 180);
     }
 
     updateFlightProgress(flight) {
@@ -566,6 +638,8 @@ class FlightTracker {
             this.arrivalMarker = null;
             this.currentPositionMarker = null;
             this.flightPath = null;
+            this.plannedRoute = null;
+            this.traveledPath = null;
         }
     }
 }
